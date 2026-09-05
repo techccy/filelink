@@ -171,6 +171,41 @@ curl -fsS -X POST "$BASE_URL/f/aB3xY9kQ/renew" \
 
 ---
 
+## DELETE /f/{id} — 撤销（提前过期）
+
+在上传者主动撤销时立即使链接失效。鉴权与续期对称：**持有该链接续期密钥的人即视为上传者**。语义上等价于把 `expiresAt` 拨到当前时刻——下载立即 410，磁盘文件由清理任务在下一个周期真删，不可恢复。
+
+### 请求
+
+| 项 | 说明 |
+|---|---|
+| 方法 / 路径 | `DELETE /f/{id}` |
+| `X-Renewal-Secret` | 必填，上传响应中返回的 `secret` |
+| 请求体 | 无 |
+
+### 响应 `200 OK`
+
+```json
+{"id":"aB3xY9kQ","revoked":true}
+```
+
+### 错误
+
+| 状态码 | 含义 |
+|---|---|
+| `400` | 缺少 `X-Renewal-Secret` 请求头 |
+| `403` | 续期密钥错误 |
+| `404` | 链接不存在 |
+| `410` | 链接已过期或已被撤销，不可再次撤销 |
+
+```bash
+curl -fsS -X DELETE "$BASE_URL/f/aB3xY9kQ" -H "X-Renewal-Secret: $SECRET"
+```
+
+撤销后行为与自然过期完全一致：`GET /f/{id}` 返回 410（区分于 404"从未存在"），renew 与重复 DELETE 均返回 410。
+
+---
+
 ## MIME 规则
 
 下载时的 `Content-Type` 完全由上传时的文件名（扩展名）决定，请求体的 `Content-Type` 不参与判定：

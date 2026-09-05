@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>filelink</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- 主视图 -->
+  <div id="view-main" class="view">
+    <header data-tauri-drag-region>
+      <span class="brand"><span class="dot"></span>filelink</span>
+      <span id="host-badge" class="host" title=""></span>
+      <button id="btn-settings" class="ghost" title="设置">⚙</button>
+    </header>
+
+    <div id="dropzone" class="dropzone">
+      <div class="dz-icon">↑</div>
+      <div class="dz-title">拖入文件即可上传</div>
+      <div class="dz-sub">或 点击选择 · ⌘V 粘贴</div>
+    </div>
+
+    <div id="upload-list" class="list hidden"></div>
+
+    <div class="section-label">链接</div>
+    <div id="history-list" class="list"></div>
+    <div id="history-empty" class="empty">还没有链接，拖入文件开始</div>
+  </div>
+
+  <!-- 设置视图 -->
+  <div id="view-settings" class="view hidden">
+    <header data-tauri-drag-region>
+      <button id="btn-back" class="ghost" title="返回">‹</button>
+      <span class="brand">设置</span>
+    </header>
+
+    <div class="form">
+      <label>服务地址</label>
+      <input id="in-base-url" type="url" placeholder="https://f.example.com" spellcheck="false" />
+
+      <label>上传令牌</label>
+      <input id="in-token" type="password" placeholder="留空则保持不变" spellcheck="false" />
+
+      <div class="row">
+        <button id="btn-test" class="secondary">测试连接</button>
+        <span id="test-result" class="hint"></span>
+      </div>
+
+      <div class="row toggle-row">
+        <span>开机自启</span>
+        <button id="btn-autostart" class="switch" role="switch" aria-checked="false"><span class="knob"></span></button>
+      </div>
+
+      <button id="btn-save" class="primary">保存</button>
+      <div id="save-result" class="hint center"></div>
+    </div>
+    <footer>filelink desktop v0.1.0</footer>
+  </div>
+
+  <!-- 首次引导视图 -->
+  <div id="view-onboarding" class="view hidden">
+    <header data-tauri-drag-region>
+      <span class="brand"><span class="dot"></span>filelink</span>
+    </header>
+    <div class="hero">
+      <div class="hero-title">拖入文件，即得临时公链</div>
+      <div class="hero-sub">先连接你的 filelink 服务——地址和上传令牌由你的部署方提供。</div>
+    </div>
+    <div class="form">
+      <label>服务地址</label>
+      <input id="ob-base-url" type="url" placeholder="https://f.example.com" spellcheck="false" />
+
+      <label>上传令牌</label>
+      <input id="ob-token" type="password" placeholder="UPLOAD_TOKEN" spellcheck="false" />
+
+      <div class="row">
+        <button id="ob-test" class="secondary">测试连接</button>
+        <span id="ob-test-result" class="hint"></span>
+      </div>
+
+      <button id="ob-done" class="primary">完成</button>
+      <div id="ob-result" class="hint center"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

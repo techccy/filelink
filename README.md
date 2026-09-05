@@ -7,9 +7,13 @@
 - 拖拽（或粘贴）上传，多文件逐个上传，每个文件一条独立公链
 - 公链严格 raw 直出：正确 `Content-Type` + `Content-Disposition: inline`，文本类给 `text/plain`，PDF / 图片按原生类型
 - 上传令牌鉴权（仅上传需要，下载公开）
-- 链接默认 2 小时有效，上传者凭续期密钥一键 +2h，不限次数
+- 链接默认 2 小时有效，上传者凭续期密钥一键 +2h，不限次数，也可随时撤销
 - 到期真删（记录 + 磁盘文件），不可恢复；每小时清理，附带孤儿文件清扫
 - 上传历史保存在浏览器 localStorage，换设备不迁移
+
+## 桌面客户端
+
+[desktop/](desktop/) 提供 macOS 菜单栏客户端（Tauri 2）：文件拖到状态栏图标即上传并自动复制链接，面板内管理历史、倒计时、续期与撤销。构建与说明见 [desktop/README.md](desktop/README.md)。
 
 ## 快速开始
 
@@ -79,6 +83,15 @@ curl -X POST https://f.example.com/f/aB3xY9kQ/renew \
 ```
 
 返回新的 `expiresAt`（+`UPLOAD_TTL`）。过期后不可复活（410）。
+
+### 撤销
+
+```bash
+curl -X DELETE https://f.example.com/f/aB3xY9kQ \
+  -H "X-Renewal-Secret: 8f3c…"
+```
+
+上传者凭续期密钥随时撤销（提前过期）：下载立即 410，磁盘文件下个清理周期真删，不可恢复。
 
 ## 行为细节
 

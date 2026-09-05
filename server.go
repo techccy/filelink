@@ -42,6 +42,7 @@ func (s *Server) Mux(webRoot fs.FS) *http.ServeMux {
 	mux.HandleFunc("POST /api/upload", s.handleUpload)
 	mux.HandleFunc("GET /f/{id}", s.handleDownload)
 	mux.HandleFunc("POST /f/{id}/renew", s.handleRenew)
+	mux.HandleFunc("DELETE /f/{id}", s.handleDelete)
 	return mux
 }
 
@@ -189,6 +190,47 @@ func (s *Server) handleRenew(w http.ResponseWriter, r *http.Request) {
 		"url":       s.publicURL(r, "/f/"+link.ID),
 		"expiresAt": newExpiry.UTC().Format(time.RFC3339),
 	})
+}
+
+// handleDelete revokes a link before its expiry. Auth mirrors renew: whoever
+// holds the renewal secret counts as the uploader. The link expires in place —
+// downloads immediately 410, the janitor deletes row and file on its next pass.
+func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
+	secret := r.Header.Get("X-Renewal-Secret")
+	if secret == "" {
+		httpError(w, http.StatusBadRequest, "missing X-Renewal-Secret")
+		return
+	}
+
+	link, err := s.store.Get(r.PathValue("id"))
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			httpError(w, http.StatusNotFound, "link not found")
+			return
+		}
+		httpError(w, http.StatusInternalServerError, "lookup link")
+		return
+	}
+	if !time.Now().Before(link.ExpiresAt) {
+		httpError(w, http.StatusGone, "link expired")
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(hashSecret(secret)), []byte(link.SecretHash)) != 1 {
+		httpError(w, http.StatusForbidden, "invalid renewal secret")
+		return
+	}
+
+	ok, err := s.store.Revoke(link.ID, time.Now())
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, "revoke")
+		return
+	}
+	if !ok {
+		httpError(w, http.StatusGone, "link expired")
+		return
+	}
+	log.Printf("revoked %s (%s)", link.ID, link.Filename)
+	writeJSON(w, http.StatusOK, map[string]any{"id": link.ID, "revoked": true})
 }
 
 func (s *Server) authOK(r *http.Request) bool {

@@ -103,6 +103,21 @@ func (s *Store) Renew(id string, expiresAt time.Time) (bool, error) {
 	return n > 0, nil
 }
 
+// Revoke expires a link immediately (early expiry). Reports whether the row
+// was still alive; the janitor removes row and file on its next pass.
+func (s *Store) Revoke(id string, now time.Time) (bool, error) {
+	res, err := s.db.Exec(`UPDATE links SET expires_at = ? WHERE id = ? AND expires_at > ?`,
+		now.Unix(), id, now.Unix())
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 // DeleteExpired removes expired rows and returns their ids so the caller can
 // delete the backing files.
 func (s *Store) DeleteExpired(before time.Time) ([]string, error) {

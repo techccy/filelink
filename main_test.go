@@ -74,6 +74,20 @@ func (e *testEnv) get(url string) *http.Response {
 	return resp
 }
 
+func (e *testEnv) revoke(id, secret string) *http.Response {
+	e.t.Helper()
+	req, err := http.NewRequest("DELETE", e.ts.URL+"/f/"+id, nil)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	req.Header.Set("X-Renewal-Secret", secret)
+	resp, err := e.ts.Client().Do(req)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return resp
+}
+
 func TestUploadDownloadRoundTrip(t *testing.T) {
 	e := newTestEnv(t, 1<<20, time.Hour)
 
@@ -247,6 +261,76 @@ func TestJanitorDeletesExpired(t *testing.T) {
 	}
 	if fileExists(filepath.Join(e.dataDir, "files", id)) {
 		t.Fatal("expired file still on disk")
+	}
+}
+
+func TestRevoke(t *testing.T) {
+	e := newTestEnv(t, 1<<20, time.Hour)
+
+	_, data := e.upload("a.txt", []byte("x"), "test-token")
+	id := data["id"].(string)
+	url := data["url"].(string)
+	secret := data["secret"].(string)
+
+	respNoSecret := e.revoke(id, "")
+	respNoSecret.Body.Close()
+	if respNoSecret.StatusCode != http.StatusBadRequest {
+		t.Fatalf("missing secret status = %d, want 400", respNoSecret.StatusCode)
+	}
+	if resp := e.revoke(id, "wrong-secret"); resp.StatusCode != http.StatusForbidden {
+		resp.Body.Close()
+		t.Fatalf("wrong secret status = %d, want 403", resp.StatusCode)
+	}
+	if resp := e.revoke("zzzzzzzz", secret); resp.StatusCode != http.StatusNotFound {
+		resp.Body.Close()
+		t.Fatalf("unknown id status = %d, want 404", resp.StatusCode)
+	}
+
+	resp := e.revoke(id, secret)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("revoke status = %d, want 200", resp.StatusCode)
+	}
+
+	// A revoked link behaves exactly like an expired one: download 410,
+	// renew 410, and re-revoke 410 — until the janitor removes the row.
+	dl := e.get(url)
+	dl.Body.Close()
+	if dl.StatusCode != http.StatusGone {
+		t.Fatalf("download revoked status = %d, want 410", dl.StatusCode)
+	}
+	renewReq, _ := http.NewRequest("POST", e.ts.URL+"/f/"+id+"/renew", nil)
+	renewReq.Header.Set("X-Renewal-Secret", secret)
+	rr, err := e.ts.Client().Do(renewReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr.Body.Close()
+	if rr.StatusCode != http.StatusGone {
+		t.Fatalf("renew revoked status = %d, want 410", rr.StatusCode)
+	}
+	if resp2 := e.revoke(id, secret); resp2.StatusCode != http.StatusGone {
+		t.Fatalf("re-revoke status = %d, want 410", resp2.StatusCode)
+	}
+}
+
+func TestRevokeJanitorDeletesFile(t *testing.T) {
+	e := newTestEnv(t, 1<<20, time.Hour)
+
+	_, data := e.upload("a.txt", []byte("x"), "test-token")
+	id := data["id"].(string)
+
+	if resp := e.revoke(id, data["secret"].(string)); resp.StatusCode != http.StatusOK {
+		t.Fatalf("revoke status = %d, want 200", resp.StatusCode)
+	}
+
+	janitorOnce(Config{DataDir: e.dataDir}, e.store)
+
+	if _, err := e.store.Get(id); err != ErrNotFound {
+		t.Fatalf("Get after janitor = %v, want ErrNotFound", err)
+	}
+	if fileExists(filepath.Join(e.dataDir, "files", id)) {
+		t.Fatal("revoked file still on disk")
 	}
 }
 
