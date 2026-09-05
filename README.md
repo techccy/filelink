@@ -44,6 +44,8 @@ docker compose up -d --build
 
 ## API
 
+完整接口文档见 [docs/API.md](docs/API.md)；面向 AI agent 的调用指南见 [AGENT.md](AGENT.md)（把它放进 agent 上下文即可让其自主上传）。
+
 ### 上传
 
 ```bash
@@ -72,7 +74,7 @@ curl https://f.example.com/f/aB3xY9kQ
 ### 续期
 
 ```bash
-curl -X POST https://f.example.com/f/aB3xY9kQ \
+curl -X POST https://f.example.com/f/aB3xY9kQ/renew \
   -H "X-Renewal-Secret: 8f3c…"
 ```
 
