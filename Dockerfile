@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 FROM golang:1-alpine AS build
 WORKDIR /src
 ENV GOPROXY=https://goproxy.cn,direct
