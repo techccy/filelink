@@ -8,16 +8,10 @@ services:
       DATA_DIR: /data
       MAX_SIZE_MB: ${MAX_SIZE_MB:-100}
       UPLOAD_TTL: ${UPLOAD_TTL:-2h}
+      CLEANUP_INTERVAL: ${CLEANUP_INTERVAL:-1h}
     volumes:
       - ./data:/data
     ports:
-      - "127.0.0.1:8080:8080"
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    restart: unless-stopped
-    command: tunnel --no-autoupdate run
-    environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
-    depends_on:
-      - filelink
+      # 默认只绑回环，供同机的反向代理 / 隧道转发。
+      # 要直接对外暴露，改为 "0.0.0.0:8080"（自行负责防火墙与 HTTPS）。
+      - "${FILELINK_BIND:-127.0.0.1:8080}:8080"

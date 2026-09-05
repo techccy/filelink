@@ -25,14 +25,18 @@ go run .
 # 打开 http://127.0.0.1:8080
 ```
 
-### Docker + Cloudflare Tunnel（推荐部署方式）
+### Docker 部署
 
 ```bash
-cp .env.example .env       # 填入 UPLOAD_TOKEN 和 TUNNEL_TOKEN
+cp .env.example .env       # 填入 UPLOAD_TOKEN
 docker compose up -d --build
 ```
 
-在 Cloudflare Zero Trust 控制台给 Tunnel 配置公共主机名，指向 `http://filelink:8080`。
+服务默认只监听 `127.0.0.1:8080`，**不直接暴露公网**——如何对外由部署者自行安排：
+
+- **直接暴露端口**：`.env` 里把 `FILELINK_BIND` 改为 `0.0.0.0:8080`，防火墙放行即可；HTTPS 需自行解决，并把 `BASE_URL` 设为对外地址
+- **反向代理**（nginx / caddy / traefik 等）：代理到 `127.0.0.1:8080`，转发 `X-Forwarded-Proto: https` 后 `BASE_URL` 可留空自动推导
+- **Cloudflare Tunnel**（可选方案之一）：不开入站端口，`cloudflared tunnel run --token <TOKEN>` 指向 `http://127.0.0.1:8080`；注意免费版代理有 100MB 请求体上限
 
 ## 配置（环境变量）
 
@@ -41,10 +45,11 @@ docker compose up -d --build
 | `UPLOAD_TOKEN` | 必填 | 上传令牌（Bearer） |
 | `DATA_DIR` | `./data` | 数据目录（SQLite + 文件） |
 | `BASE_URL` | 自动推导 | 公链前缀，如 `https://f.example.com`；留空则从请求推导 |
-| `MAX_SIZE_MB` | `100` | 单文件上限。**Cloudflare 免费版代理请求体上限 100MB**，调大需绕开 CF 代理 |
+| `MAX_SIZE_MB` | `100` | 单文件上限。若经 Cloudflare 免费版代理，请求体上限 100MB，调大需绕开其代理 |
 | `UPLOAD_TTL` | `2h` | 默认有效期，续期一次延长同时长 |
 | `CLEANUP_INTERVAL` | `1h` | 过期清理间隔 |
-| `LISTEN` | `:8080` | 监听地址 |
+| `LISTEN` | `:8080` | 监听地址（容器内端口映射见 compose 的 `FILELINK_BIND`） |
+| `FILELINK_BIND` | `127.0.0.1:8080` | 仅 docker compose：宿主机端口绑定，见上文部署方式 |
 
 ## API
 
