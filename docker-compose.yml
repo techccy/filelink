@@ -1,0 +1,23 @@
+services:
+  filelink:
+    build: .
+    restart: unless-stopped
+    environment:
+      UPLOAD_TOKEN: ${UPLOAD_TOKEN:?set UPLOAD_TOKEN in .env}
+      BASE_URL: ${BASE_URL:-}
+      DATA_DIR: /data
+      MAX_SIZE_MB: ${MAX_SIZE_MB:-100}
+      UPLOAD_TTL: ${UPLOAD_TTL:-2h}
+    volumes:
+      - ./data:/data
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
+    depends_on:
+      - filelink

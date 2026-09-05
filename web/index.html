@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>filelink · 临时文件分享</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --ink: #1a1d21; --muted: #6b7280;
+    --line: #e5e7eb; --accent: #2563eb; --accent-ink: #ffffff;
+    --ok: #059669; --err: #dc2626; --warn: #b45309;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
+  header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 20px; }
+  header h1 { font-size: 22px; margin: 0; }
+  header span { color: var(--muted); font-size: 13px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .dropzone {
+    border: 2px dashed #c3c9d4; border-radius: 12px; padding: 44px 16px;
+    text-align: center; color: var(--muted); cursor: pointer; transition: all .15s;
+    background: var(--card);
+  }
+  .dropzone.drag { border-color: var(--accent); background: #eff6ff; color: var(--accent); }
+  .dropzone strong { color: var(--ink); }
+  .dropzone p { margin: 4px 0 0; font-size: 12.5px; }
+  h2 { font-size: 14px; margin: 0 0 10px; color: var(--ink); }
+  .muted { color: var(--muted); font-size: 13px; }
+  input[type="password"], input[type="text"] {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px;
+    font-size: 14px; margin: 8px 0;
+  }
+  button {
+    border: 0; border-radius: 8px; padding: 7px 14px; font-size: 13.5px;
+    cursor: pointer; background: var(--accent); color: var(--accent-ink);
+  }
+  button.ghost { background: transparent; color: var(--accent); border: 1px solid currentColor; }
+  button.gray { background: #eceef1; color: var(--ink); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .item {
+    display: flex; flex-direction: column; gap: 6px; padding: 12px 0;
+    border-top: 1px solid var(--line);
+  }
+  .item:first-of-type { border-top: 0; padding-top: 4px; }
+  .item .top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .item .name { font-weight: 600; }
+  .item .size { color: var(--muted); font-size: 12.5px; }
+  .item .expire { font-size: 12.5px; }
+  .item.expired .name { color: var(--muted); text-decoration: line-through; }
+  .item .expire.late { color: var(--err); }
+  .item .expire.soon { color: var(--warn); }
+  .linkline { display: flex; gap: 6px; align-items: center; }
+  .linkline a {
+    flex: 1; min-width: 0; color: var(--accent); font-size: 13px; font-family: ui-monospace, monospace;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none;
+  }
+  .bar { height: 6px; background: #eceef1; border-radius: 4px; overflow: hidden; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .12s; }
+  .status { font-size: 12.5px; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--err); }
+  .actions { margin-top: 10px; }
+  .hide { display: none !important; }
+  .toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+    background: var(--ink); color: #fff; padding: 8px 18px; border-radius: 999px;
+    font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  .toast.show { opacity: .92; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>filelink</h1><span>拖拽上传 · 公链 2 小时有效 · 可续期</span></header>
+
+  <div class="card hide" id="tokenCard">
+    <h2>设置上传令牌</h2>
+    <p class="muted">首次使用需要填写服务端配置的 UPLOAD_TOKEN，仅保存在本浏览器。</p>
+    <input type="password" id="tokenInput" placeholder="UPLOAD_TOKEN" autocomplete="off">
+    <button id="tokenSave">保存</button>
+    <span class="status err" id="tokenErr"></span>
+  </div>
+
+  <div class="dropzone" id="dropzone">
+    <strong>拖拽文件到这里</strong>，或点击选择文件
+    <p>也支持 Ctrl/⌘+V 粘贴文件 · 每个文件生成一条独立公链</p>
+    <input type="file" id="fileInput" multiple class="hide">
+  </div>
+
+  <div class="card hide" id="progressCard">
+    <h2>上传中</h2>
+    <div id="progressList"></div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content: space-between;">
+      <h2>我的链接 <span class="muted">（保存在本浏览器，换设备不迁移）</span></h2>
+      <div class="row">
+        <button class="ghost" id="copyAll">复制全部链接</button>
+        <button class="gray" id="clearHistory">清空</button>
+      </div>
+    </div>
+    <div id="historyList"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const TOKEN_KEY = 'filelink.token';
+  const HIST_KEY = 'filelink.history';
+
+  const $ = id => document.getElementById(id);
+  const dropzone = $('dropzone'), fileInput = $('fileInput');
+  const history = loadHist();
+
+  function getToken() { return localStorage.getItem(TOKEN_KEY) || ''; }
+  function loadHist() {
+    try { return JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch { return []; }
+  }
+  function saveHist() { localStorage.setItem(HIST_KEY, JSON.stringify(history)); }
+
+  let toastTimer;
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 1600);
+  }
+  function copy(text) {
+    navigator.clipboard.writeText(text).then(() => toast('已复制'))
+      .catch(() => toast('复制失败，请手动复制'));
+  }
+  function humanSize(n) {
+    if (n < 1024) return n + ' B';
+    const units = ['KB', 'MB', 'GB'];
+    let i = -1;
+    do { n /= 1024; i++; } while (n >= 1024 && i < units.length - 1);
+    return n.toFixed(n >= 100 ? 0 : 1) + ' ' + units[i];
+  }
+  function isExpired(iso) { return new Date(iso).getTime() <= Date.now(); }
+  function fmtExpiry(iso) {
+    const d = new Date(iso);
+    const mins = Math.round((d.getTime() - Date.now()) / 60000);
+    if (mins <= 0) return '已过期';
+    if (mins < 60) return `剩 ${mins} 分钟`;
+    const h = Math.floor(mins / 60), m = mins % 60;
+    return `剩 ${h} 小时 ${m} 分`;
+  }
+
+  /* ---------- token ---------- */
+  function renderToken() { $('tokenCard').classList.toggle('hide', !!getToken()); }
+  $('tokenSave').onclick = () => {
+    const v = $('tokenInput').value.trim();
+    if (!v) { $('tokenErr').textContent = '不能为空'; return; }
+    localStorage.setItem(TOKEN_KEY, v);
+    $('tokenErr').textContent = '';
+    renderToken();
+    toast('令牌已保存');
+  };
+
+  /* ---------- history ---------- */
+  function itemNode(entry, fromHistory) {
+    const div = document.createElement('div');
+    div.className = 'item' + (isExpired(entry.expiresAt) ? ' expired' : '');
+    const expired = isExpired(entry.expiresAt);
+
+    const top = document.createElement('div');
+    top.className = 'top';
+    top.innerHTML =
+      `<span class="name"></span><span class="size"></span>` +
+      `<span class="expire ${expired ? 'late' : ''}"></span>`;
+    top.querySelector('.name').textContent = entry.filename;
+    top.querySelector('.size').textContent = humanSize(entry.size);
+    top.querySelector('.expire').textContent = fmtExpiry(entry.expiresAt);
+
+    const linkline = document.createElement('div');
+    linkline.className = 'linkline';
+    const a = document.createElement('a');
+    a.href = entry.url; a.textContent = entry.url;
+    a.target = '_blank'; a.rel = 'noopener';
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'ghost'; copyBtn.textContent = '复制';
+    copyBtn.onclick = () => copy(entry.url);
+
+    linkline.append(a, copyBtn);
+
+    const row = document.createElement('div');
+    row.className = 'row';
+    if (!expired) {
+      const renewBtn = document.createElement('button');
+      renewBtn.className = 'ghost'; renewBtn.textContent = '续期 +2h';
+      renewBtn.onclick = async () => {
+        renewBtn.disabled = true;
+        try {
+          const res = await fetch(`/f/${entry.id}/renew`, {
+            method: 'POST', headers: { 'X-Renewal-Secret': entry.secret },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            entry.expiresAt = data.expiresAt;
+            saveHist(); renderHistory();
+            toast('已续期');
+          } else if (res.status === 410) {
+            entry.expiresAt = new Date(0).toISOString();
+            saveHist(); renderHistory();
+            toast('链接已过期，无法续期');
+          } else if (res.status === 403) {
+            toast('续期密钥不匹配');
+          } else {
+            toast(`续期失败 (${res.status})`);
+          }
+        } catch { toast('网络错误'); renewBtn.disabled = false; }
+      };
+      row.append(renewBtn);
+    }
+    const openBtn = document.createElement('button');
+    openBtn.className = 'gray'; openBtn.textContent = '打开';
+    openBtn.onclick = () => window.open(entry.url, '_blank', 'noopener');
+    row.append(openBtn);
+
+    div.append(top, linkline, row);
+    return div;
+  }
+
+  function renderHistory() {
+    const list = $('historyList');
+    list.textContent = '';
+    history.sort((a, b) => new Date(b.expiresAt) - new Date(a.expiresAt));
+    if (!history.length) {
+      const p = document.createElement('p');
+      p.className = 'muted'; p.textContent = '还没有上传过文件。';
+      list.append(p);
+      return;
+    }
+    for (const entry of history) list.append(itemNode(entry, true));
+  }
+
+  $('copyAll').onclick = () => {
+    const alive = history.filter(e => !isExpired(e.expiresAt));
+    if (!alive.length) { toast('没有有效链接'); return; }
+    copy(alive.map(e => `${e.filename}: ${e.url}`).join('\n'));
+  };
+  $('clearHistory').onclick = () => {
+    if (!history.length) return;
+    history.length = 0; saveHist(); renderHistory(); toast('已清空本地记录');
+  };
+
+  /* ---------- upload ---------- */
+  function setBusy(b) { dropzone.style.pointerEvents = b ? 'none' : ''; dropzone.style.opacity = b ? .6 : 1; }
+
+  function uploadOne(file, ui) {
+    return new Promise(resolve => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/upload');
+      xhr.setRequestHeader('Authorization', 'Bearer ' + getToken());
+      xhr.setRequestHeader('X-Filename', encodeURIComponent(file.name));
+      xhr.upload.onprogress = e => {
+        if (e.lengthComputable) {
+          ui.bar.style.width = (e.loaded / e.total * 100).toFixed(1) + '%';
+          ui.status.textContent = `${humanSize(e.loaded)} / ${humanSize(e.total)}`;
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            ui.bar.style.width = '100%';
+            ui.status.textContent = '完成';
+            ui.status.className = 'status ok';
+            resolve(data);
+            return;
+          } catch { /* fallthrough */ }
+        }
+        ui.status.className = 'status err';
+        if (xhr.status === 401) {
+          ui.status.textContent = '令牌无效';
+          localStorage.removeItem(TOKEN_KEY);
+          renderToken();
+        } else if (xhr.status === 413) {
+          ui.status.textContent = '超过大小上限';
+        } else {
+          ui.status.textContent = `失败 (${xhr.status})`;
+        }
+        resolve(null);
+      };
+      xhr.onerror = () => {
+        ui.status.className = 'status err';
+        ui.status.textContent = '网络错误';
+        resolve(null);
+      };
+      xhr.send(file);
+    });
+  }
+
+  async function handleFiles(files) {
+    if (!files.length) return;
+    if (!getToken()) { renderToken(); toast('请先设置上传令牌'); return; }
+    setBusy(true);
+    $('progressCard').classList.remove('hide');
+    const list = $('progressList');
+    list.textContent = '';
+    for (const file of files) {
+      const row = document.createElement('div');
+      row.className = 'item';
+      row.style.borderTop = '1px solid var(--line)';
+      const top = document.createElement('div');
+      top.className = 'top';
+      top.innerHTML = '<span class="name"></span><span class="size"></span><span class="status"></span>';
+      top.querySelector('.name').textContent = file.name;
+      top.querySelector('.size').textContent = humanSize(file.size);
+      const bar = document.createElement('div');
+      bar.className = 'bar'; bar.append(document.createElement('div'));
+      row.append(top, bar);
+      list.append(row);
+      const data = await uploadOne(file, {
+        bar: bar.firstChild,
+        status: top.querySelector('.status'),
+      });
+      if (data) {
+        history.push({
+          id: data.id, url: data.url, filename: data.filename,
+          size: data.size, expiresAt: data.expiresAt, secret: data.secret,
+        });
+        saveHist(); renderHistory();
+      }
+    }
+    setBusy(false);
+  }
+
+  dropzone.onclick = () => fileInput.click();
+  fileInput.onchange = () => { handleFiles([...fileInput.files]); fileInput.value = ''; };
+  dropzone.ondragover = e => { e.preventDefault(); dropzone.classList.add('drag'); };
+  dropzone.ondragleave = () => dropzone.classList.remove('drag');
+  dropzone.ondrop = e => {
+    e.preventDefault();
+    dropzone.classList.remove('drag');
+    if (e.dataTransfer && e.dataTransfer.files) handleFiles([...e.dataTransfer.files]);
+  };
+  document.addEventListener('paste', e => {
+    if (e.clipboardData && e.clipboardData.files.length) handleFiles([...e.clipboardData.files]);
+  });
+
+  /* ---------- init ---------- */
+  renderToken();
+  renderHistory();
+  setInterval(renderHistory, 30000);
+})();
+</script>
+</body>
+</html>
